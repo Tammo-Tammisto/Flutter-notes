@@ -3,7 +3,7 @@ import 'package:flutter_notes/screens/notebook_view_screen.dart';
 import 'package:flutter_notes/services/database_helper.dart';
 
 class BookshelfScreen extends StatefulWidget {
-  const BookshelfScreen({Key? key}) : super(key: key);
+  const BookshelfScreen({super.key});
 
   @override
   State<BookshelfScreen> createState() => _BookshelfScreenState();
@@ -12,6 +12,8 @@ class BookshelfScreen extends StatefulWidget {
 class _BookshelfScreenState extends State<BookshelfScreen> {
   // Store custom titles - empty by default
   final Map<String, String> _bookTitles = {};
+  static bool _hasLoaded = false;
+  bool _isLoading = !_hasLoaded;
 
   // Inside _BookshelfScreenState
   final DatabaseHelper _dbHelper = DatabaseHelper();
@@ -26,6 +28,8 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     final titles = await _dbHelper.getNotebookTitles();
     setState(() {
       _bookTitles.addAll(titles);
+      _isLoading = false;
+      _hasLoaded = true;
     });
   }
 
@@ -48,6 +52,7 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
     const Color(0xFFC1A4B1),
     const Color(0xFFE4A9AC),
     const Color(0xFFF2C9C9),
+    const Color(0xFFF5C6B6),
     const Color(0xFFF5D5D5),
     const Color(0xFFB59D94),
     const Color(0xFFEED5C7),
@@ -58,6 +63,21 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Colors.white,
+            ),
+            SizedBox(height: 16),
+            Text("Loading...", style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       child: Container(
@@ -97,7 +117,7 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
           String bookId = "${shelfName}_$idx";
           String title = _bookTitles[bookId] ?? "";
 
-          return _buildBook(context, color, title, bookId);
+          return Expanded(child: _buildBook(context, color, title, bookId));
         }).toList(),
       ),
     );
@@ -135,7 +155,6 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
         }
       },
       child: Container(
-        width: 40,
         margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 12),
         decoration: BoxDecoration(
           color: color,
@@ -151,12 +170,15 @@ class _BookshelfScreenState extends State<BookshelfScreen> {
         child: title.isNotEmpty
             ? RotatedBox(
                 quarterTurns: 3,
-                child: Center(
-                  child: Text(
-                    title.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                child: Padding(
+                  padding: const EdgeInsets.all(
+                    8,
+                  ), // optional: keeps text from edges
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Text(
+                      title.toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
