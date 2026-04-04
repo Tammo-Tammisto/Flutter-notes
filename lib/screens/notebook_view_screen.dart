@@ -134,13 +134,25 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
           },
         ),
         title: InkWell(
-          // Using InkWell for a better tap area for renaming
           onTap: _renameNotebook,
+          borderRadius: BorderRadius.circular(8), // Adds a nice ripple shape
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-            child: Text(
-              _currentTitle,
-              style: const TextStyle(color: Colors.black87),
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+            child: Row(
+              mainAxisSize:
+                  MainAxisSize.min, // Prevents the Row from taking full width
+              children: [
+                Text(
+                  _currentTitle,
+                  style: const TextStyle(color: Colors.black87),
+                ),
+                const SizedBox(width: 8), // Space between title and icon
+                const Icon(
+                  Icons.edit, // Or Icons.drive_file_rename_outline
+                  size: 18,
+                  color: Colors.black54,
+                ),
+              ],
             ),
           ),
         ),
@@ -239,13 +251,11 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
             mainAxisSize: MainAxisSize.min, // Constrains height to content
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("• Click the title in the top left to rename."),
-              SizedBox(height: 8),
-              Text("• Click the bottom icons to add items."),
+              Text("Click the bottom icons to add items."),
               SizedBox(height: 8),
               Row(
                 children: [
-                  Text("  • "),
+                  Text("   "),
                   Icon(Icons.note_add, size: 18),
                   Text(" icon to add a sticky note."),
                 ],
@@ -253,7 +263,7 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
               SizedBox(height: 8),
               Row(
                 children: [
-                  Text("  • "),
+                  Text("   "),
                   Icon(Icons.image, size: 18),
                   Text(" icon to add an image."),
                 ],
@@ -261,7 +271,7 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
               SizedBox(height: 8),
               Row(
                 children: [
-                  Text("  • "),
+                  Text("   "),
                   Icon(Icons.text_fields, size: 18),
                   Text(" icon, then click anywhere to place text."),
                 ],
@@ -273,7 +283,7 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
               SizedBox(height: 8),
               Text("• Click and hold an item to delete it."),
               SizedBox(height: 8),
-              
+              Text("• Click the title in the top left to rename."),
             ],
           ),
           actions: [
