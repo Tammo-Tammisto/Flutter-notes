@@ -3,12 +3,17 @@ import 'package:flutter_notes/screens/dashboard_screen.dart';
 import 'package:flutter_notes/screens/main_layout.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+
+  await StudyAlertService.init(); // Initialize alerts
 
   runApp(const MyApp());
 }
