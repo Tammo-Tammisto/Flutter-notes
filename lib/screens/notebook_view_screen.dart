@@ -144,6 +144,13 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
             ),
           ),
         ),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.black87),
+            tooltip: "How to Use",
+            onPressed: _showHowToUseDialog,
+          ),
+        ],
       ),
       body: GestureDetector(
         onTapDown: (details) {
@@ -210,6 +217,73 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showHowToUseDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.lightbulb_outline, color: Colors.orange),
+              SizedBox(width: 10),
+              Text("How to Use"),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min, // Constrains height to content
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("• Click the title in the top left to rename."),
+              SizedBox(height: 8),
+              Text("• Click the bottom icons to add items."),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("  • "),
+                  Icon(Icons.note_add, size: 18),
+                  Text(" icon to add a sticky note."),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("  • "),
+                  Icon(Icons.image, size: 18),
+                  Text(" icon to add an image."),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("  • "),
+                  Icon(Icons.text_fields, size: 18),
+                  Text(" icon, then click anywhere to place text."),
+                ],
+              ),
+              //Text("• Tap " + Icons.text_fields + " icon, then tap anywhere to place text."),
+              SizedBox(height: 8),
+              SizedBox(height: 8),
+              Text("• Drag items to move them around."),
+              SizedBox(height: 8),
+              Text("• Click and hold an item to delete it."),
+              SizedBox(height: 8),
+              
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Got it!"),
+            ),
+          ],
+        );
+      },
     );
   }
 
