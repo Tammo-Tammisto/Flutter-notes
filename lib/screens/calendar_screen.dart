@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/database_helper.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -10,9 +11,12 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selectedDate = DateTime.now();
-  final DateTime _today = DateTime.now();
-  bool _showTasks = false;
 
+  // Track "Today" in a variable so we can update it at midnight
+  DateTime _today = DateTime.now();
+  Timer? _dateTimer;
+
+  bool _showTasks = false;
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _dayTasks = [];
 
@@ -20,6 +24,38 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void initState() {
     super.initState();
     _loadTasks();
+    _startDateListener();
+  }
+
+  @override
+  void dispose() {
+    _dateTimer?.cancel(); // Clean up the timer
+    super.dispose();
+  }
+
+  // This listener checks every minute if the date has changed
+  void _startDateListener() {
+    _dateTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      final now = DateTime.now();
+      // Check if day, month, or year changed
+      if (now.day != _today.day ||
+          now.month != _today.month ||
+          now.year != _today.year) {
+        setState(() {
+          _today = now; // Update our "Today" reference
+
+          // If the user was viewing the 'old' today, we might want
+          // to refresh the tasks automatically.
+          if (!_showTasks) {
+            _selectedDate = now;
+          }
+        });
+
+        if (_showTasks) {
+          _loadTasks(); // Refresh list if a task was open
+        }
+      }
+    });
   }
 
   void _loadTasks() async {
@@ -44,12 +80,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _buildWeekdayLabels(),
           const SizedBox(height: 10),
 
-          // Using LayoutBuilder to calculate the aspect ratio so it fills the height
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Calculate ideal aspect ratio to prevent scrolling
-                // 7 columns, roughly 5-6 rows
                 final double cellWidth = constraints.maxWidth / 7;
                 final double cellHeight = constraints.maxHeight / 6;
                 final double aspectRatio = cellWidth / cellHeight;
@@ -116,29 +149,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
     int offset = firstOfMonth.weekday - 1;
 
     return GridView.builder(
-      physics:
-          const NeverScrollableScrollPhysics(), // Disable scrolling inside the grid
+      physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
-        childAspectRatio: aspectRatio, // Dynamic ratio to fill space
+        childAspectRatio: aspectRatio,
       ),
       itemCount: daysInMonth + offset,
       itemBuilder: (context, index) {
         if (index < offset) return const SizedBox.shrink();
 
         int day = index - offset + 1;
+
+        // Use the tracked _today variable here
         bool isToday =
             day == _today.day &&
             _selectedDate.month == _today.month &&
             _selectedDate.year == _today.year;
+
         bool isSelected = _selectedDate.day == day && _showTasks;
 
         return InkWell(
           onTap: () {
             if (_selectedDate.day == day && _showTasks) {
-              // Tapping the same day that is already open closes it
               setState(() => _showTasks = false);
             } else {
               setState(() {
@@ -197,7 +231,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ],
         ),
-        // Add Task Button is now here
         ElevatedButton.icon(
           onPressed: _showAddTaskDialog,
           icon: const Icon(Icons.add, size: 18),
@@ -214,7 +247,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  // Find _buildTaskList in calendar_screen.dart and update the trailing widget
   Widget _buildTaskList() {
     return Expanded(
       child: _dayTasks.isEmpty
@@ -229,33 +261,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
             )
           : ListView.builder(
               itemCount: _dayTasks.length,
-              itemBuilder: (context, i) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                color: Colors.white.withOpacity(0.8),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.check_circle_outline,
-                    color: Colors.purple,
+              itemBuilder: (context, i) {
+                final task = _dayTasks[i];
+                bool isDone = task['isDone'] == 1;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.white.withOpacity(0.8),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  title: Text(_dayTasks[i]['task']),
-                  trailing: IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                      size: 20,
+                  child: ListTile(
+                    leading: IconButton(
+                      icon: Icon(
+                        isDone
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: isDone ? Colors.green : Colors.purple,
+                      ),
+                      onPressed: () async {
+                        await _dbHelper.toggleCalendarTask(task['id'], isDone);
+                        _loadTasks();
+                      },
                     ),
-                    onPressed: () async {
-                      // Added Delete Logic
-                      await _dbHelper.deleteCalendarTask(_dayTasks[i]['id']);
-                      _loadTasks(); // Refresh list
-                    },
+                    title: Text(
+                      task['task'],
+                      style: TextStyle(
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                        color: isDone ? Colors.grey : Colors.black87,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.redAccent,
+                        size: 20,
+                      ),
+                      onPressed: () async {
+                        await _dbHelper.deleteCalendarTask(task['id']);
+                        _loadTasks();
+                      },
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
     );
   }

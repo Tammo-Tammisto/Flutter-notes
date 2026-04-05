@@ -43,21 +43,18 @@ class _MainLayoutState extends State<MainLayout> {
                 // Stretch ensures the timer doesn't cause width calculation errors
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 40),
                   const Center(
-                    child: CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.white,
-                      child: Text("Logo"),
+                    child: Image(
+                      image: AssetImage('assets/images/logo.png'),
+                      height: 120,
                     ),
                   ),
-                  const SizedBox(height: 40),
                   _buildNavItem(0, "Dashboard"),
                   _buildNavItem(1, "Bookshelf"),
                   _buildNavItem(2, "To-Do list"),
                   _buildNavItem(3, "Calendar"),
-                  //_buildNavItem(4, "Stickers"),
 
+                  //_buildNavItem(4, "Stickers"),
                   const Spacer(),
 
                   // THE TIMER WIDGET - Wrapped to prevent overflow
@@ -272,6 +269,15 @@ class _SidebarTimerState extends State<SidebarTimer> {
   }
 
   void _showSetTimeDialog() {
+    // Helper function to handle the logic
+    void handleSave() {
+      int? mins = int.tryParse(_minController.text);
+      if (mins != null) {
+        setState(() => _secondsRemaining = mins * 60);
+      }
+      Navigator.pop(context);
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -283,17 +289,11 @@ class _SidebarTimerState extends State<SidebarTimer> {
           decoration: const InputDecoration(
             hintText: "Enter minutes (e.g. 25)",
           ),
+          // THIS IS THE KEY PART:
+          // When the user presses "Enter" on their keyboard, this runs:
+          onSubmitted: (value) => handleSave(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              int? mins = int.tryParse(_minController.text);
-              if (mins != null) setState(() => _secondsRemaining = mins * 60);
-              Navigator.pop(context);
-            },
-            child: const Text("Set"),
-          ),
-        ],
+        actions: [TextButton(onPressed: handleSave, child: const Text("Set"))],
       ),
     );
   }

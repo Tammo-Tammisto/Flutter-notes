@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/database_helper.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -11,23 +12,47 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _todayTasks = [];
+  List<Map<String, dynamic>> _recentActivity = [];
+  Timer? _refreshTimer; // Added
+  String _lastDate = ""; // Added
 
   @override
   void initState() {
     super.initState();
-    _loadTodayTasks();
+    _lastDate = _getDateString(); // Added
+    _loadDashboardData();
+    _startTimer(); // Added
   }
 
-  // Fetches tasks from the database for the current date
-  Future<void> _loadTodayTasks() async {
-    DateTime now = DateTime.now();
-    // Format must match the format used in CalendarScreen: YYYY-MM-DD
-    String dateStr =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  @override
+  void dispose() {
+    _refreshTimer?.cancel(); // Added
+    super.dispose();
+  }
 
+  String _getDateString() {
+    DateTime now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  }
+
+  void _startTimer() {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      String currentDate = _getDateString();
+      if (currentDate != _lastDate) {
+        _lastDate = currentDate;
+        _loadDashboardData();
+      }
+    });
+  }
+
+  Future<void> _loadDashboardData() async {
+    String dateStr = _getDateString();
     final tasks = await _dbHelper.getTasksForDate(dateStr);
+    final activity = await _dbHelper.getRecentActivity();
+
     setState(() {
       _todayTasks = tasks;
+      _recentActivity = activity;
     });
   }
 
@@ -64,7 +89,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 16),
 
-              // TODO: Task checkmarks
               // TODAY'S CALENDAR TASKS PANEL
               Expanded(
                 child: Container(
@@ -101,32 +125,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             : ListView.builder(
                                 itemCount: _todayTasks.length,
                                 itemBuilder: (context, index) {
+                                  final task = _todayTasks[index];
+                                  bool isDone = task['isDone'] == 1;
+
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
+                                      color: isDone
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.white.withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.calendar_today_rounded,
-                                          color: Colors.white,
-                                          size: 18,
+                                    child: ListTile(
+                                      leading: IconButton(
+                                        icon: Icon(
+                                          isDone
+                                              ? Icons.check_box_outlined
+                                              : Icons.check_box_outline_blank,
+                                          color: isDone
+                                              ? Colors.greenAccent
+                                              : Colors.white,
+                                          size: 20,
                                         ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            _todayTasks[index]['task'],
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
+                                        onPressed: () async {
+                                          await _dbHelper.toggleCalendarTask(
+                                            task['id'],
+                                            isDone,
+                                          );
+                                          // Refresh data to show new task state AND update activity log
+                                          _loadDashboardData();
+                                        },
+                                      ),
+                                      title: Text(
+                                        task['task'],
+                                        style: TextStyle(
+                                          color: isDone
+                                              ? Colors.white38
+                                              : Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          decoration: isDone
+                                              ? TextDecoration.lineThrough
+                                              : null,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   );
                                 },
@@ -141,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(width: 16),
 
-        // RIGHT SIDE: Profile and Cookies
+        // RIGHT SIDE: Profile and Recent Activity
         Expanded(
           child: Column(
             children: [
@@ -181,32 +227,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Cookie Counter Panel
+              // NEW: Recent Activity Panel (Replaced Cookie Jar)
               Expanded(
                 child: Container(
                   width: double.infinity,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.4),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Cookie Jar",
+                        "Recent Activity",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[300],
-                        child: const Center(
-                          child: Text("Penguin Cookie Image"),
-                        ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: _recentActivity.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  "No activity yet.",
+                                  style: TextStyle(
+                                    color: Colors.black45,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _recentActivity.length,
+                                itemBuilder: (context, index) {
+                                  final activity = _recentActivity[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: 12.0,
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2.0),
+                                          child: Icon(
+                                            Icons.history,
+                                            size: 16,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            activity['description'],
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.black87,
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -219,7 +307,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Helper widget for the top pinned squares
   Widget _buildTopCard(
     Color color,
     String title,

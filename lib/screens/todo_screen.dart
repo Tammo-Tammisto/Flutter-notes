@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
-
-// Dummy model to represent our notebook categories
-class NoteCategory {
-  final String title;
-  final int noteCount;
-  final Color color;
-
-  NoteCategory({required this.title, required this.noteCount, required this.color});
-}
+import 'dart:async';
+import '../services/database_helper.dart';
 
 class TodoScreen extends StatefulWidget {
   const TodoScreen({Key? key}) : super(key: key);
@@ -17,192 +10,224 @@ class TodoScreen extends StatefulWidget {
 }
 
 class _TodoScreenState extends State<TodoScreen> {
-  int _selectedIndex = 0;
+  final DatabaseHelper _dbHelper = DatabaseHelper();
+  Map<String, List<Map<String, dynamic>>> _groupedTasks = {};
+  bool _isLoading = true;
+  Timer? _dateTimer; // Added
+  String _lastCheckedDate = ""; // Added
 
-  // Recreating the beautiful pastel categories from your design
-  final List<NoteCategory> _categories = [
-    NoteCategory(title: "Biology", noteCount: 20, color: const Color(0xFFCBA5F5)),
-    NoteCategory(title: "Math", noteCount: 33, color: const Color(0xFFE6B8D4)),
-    NoteCategory(title: "Cooking", noteCount: 10, color: const Color(0xFFFFDAB9)),
-    NoteCategory(title: "Book notes", noteCount: 26, color: const Color(0xFFFFFACD)),
-    NoteCategory(title: "Personal", noteCount: 22, color: const Color(0xFFFFC0CB)),
-    NoteCategory(title: "Presentations", noteCount: 10, color: const Color(0xFFDDA0DD)),
-    NoteCategory(title: "Everything important", noteCount: 30, color: const Color(0xFFBCA9DE)),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _lastCheckedDate = _getDateString(); // Added
+    _refreshTasks();
+    _startDateListener(); // Added
+  }
+
+  @override
+  void dispose() {
+    _dateTimer?.cancel(); // Added
+    super.dispose();
+  }
+
+  String _getDateString() {
+    DateTime now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  }
+
+  void _startDateListener() {
+    _dateTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      String currentDate = _getDateString();
+      if (currentDate != _lastCheckedDate) {
+        _lastCheckedDate = currentDate;
+        _refreshTasks();
+      }
+    });
+  }
+
+  // Fetches ALL tasks and groups them by date for the list
+  Future<void> _refreshTasks() async {
+    setState(() => _isLoading = true);
+
+    final DatabaseHelper db = DatabaseHelper();
+    final dbClient = await db.database;
+
+    // Query all tasks ordered by date
+    final List<Map<String, dynamic>> allTasks = await dbClient.query(
+      'calendar_tasks',
+      orderBy: 'date DESC',
+    );
+
+    // Grouping logic: { "2024-10-12": [task1, task2], "2024-10-11": [task3] }
+    Map<String, List<Map<String, dynamic>>> tempGrouped = {};
+    for (var task in allTasks) {
+      String date = task['date'] as String;
+      if (tempGrouped[date] == null) {
+        tempGrouped[date] = [];
+      }
+      tempGrouped[date]!.add(task);
+    }
+
+    setState(() {
+      _groupedTasks = tempGrouped;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // LEFT PANEL: Categories List
-        Expanded(
-          flex: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+    // Determine the theme color (using the purple from your design)
+    const Color themeColor = Color(0xFF9E8DD6);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "All Tasks",
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
-            child: Stack(
-              children: [
-                // The vertical dotted line detail from your design
-                Positioned(
-                  left: 30,
-                  top: 20,
-                  bottom: 20,
-                  child: Container(
-                    width: 2,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(
-                          color: Colors.deepPurple.withOpacity(0.5),
-                          width: 2,
-                          style: BorderStyle.solid, // Flutter doesn't support native dotted borders easily, solid works as a nice stand-in
-                        ),
-                      ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _groupedTasks.isEmpty
+                ? const Center(
+                    child: Text(
+                      "No tasks found.\nAdd some in the Calendar!",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.black45, fontSize: 16),
                     ),
+                  )
+                : ListView.builder(
+                    itemCount: _groupedTasks.keys.length,
+                    itemBuilder: (context, index) {
+                      String dateKey = _groupedTasks.keys.elementAt(index);
+                      List<Map<String, dynamic>> tasks =
+                          _groupedTasks[dateKey]!;
+
+                      return _buildDateSection(dateKey, tasks, themeColor);
+                    },
                   ),
-                ),
-                // The actual category list
-                ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    final isSelected = _selectedIndex == index;
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedIndex = index;
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: category.color.withOpacity(isSelected ? 1.0 : 0.6),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: isSelected
-                              ? [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(2, 2))]
-                              : [],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 20), // Push text past the line
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                category.title,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "${category.noteCount} notes",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
           ),
-        ),
-        
-        const SizedBox(width: 16),
-
-        // RIGHT PANEL: Notes in selected category
-        Expanded(
-          flex: 3,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F2F8), // Very light pink/purple
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Simulating the 3 columns of notes from your design
-                Expanded(child: _buildNotesColumn("Blood cells", _categories[_selectedIndex].color)),
-                const SizedBox(width: 20),
-                Expanded(child: _buildNotesColumn("Blood cells", _categories[_selectedIndex].color)),
-                const SizedBox(width: 20),
-                Expanded(child: _buildNotesColumn("Blood cells", _categories[_selectedIndex].color)),
-              ],
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // Helper widget to build the lists of notes on the right side
-  Widget _buildNotesColumn(String headerTitle, Color themeColor) {
+  // Builds a header for the date and the list of tasks under it
+  Widget _buildDateSection(
+    String date,
+    List<Map<String, dynamic>> tasks,
+    Color color,
+  ) {
+    // Simplify date display (e.g., Check if it's today)
+    String displayDate = date;
+    DateTime now = DateTime.now();
+    String todayStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    if (date == todayStr) displayDate = "Today";
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          headerTitle,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Text(
+            displayDate,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF7F76B3),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        _buildNoteItem("worksheet", themeColor),
-        _buildNoteItem("sample text", themeColor),
-        _buildNoteItem("I don't know anymore", themeColor, isStrikethrough: true),
-        const SizedBox(height: 24),
-        Text(
-          "Title 2",
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildNoteItem("worksheet", themeColor),
-        _buildNoteItem("sample text", themeColor),
-        _buildNoteItem("I don't know anymore", themeColor),
+        ...tasks.map((task) => _buildTaskItem(task, color)).toList(),
+        const Divider(height: 32),
       ],
     );
   }
 
-  // Helper widget for individual note list items
-  Widget _buildNoteItem(String title, Color themeColor, {bool isStrikethrough = false}) {
+  Widget _buildTaskItem(Map<String, dynamic> task, Color themeColor) {
+    bool isDone = task['isDone'] == 1;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: themeColor,
-              borderRadius: BorderRadius.circular(4),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onLongPress: () => _confirmDelete(task['id']), // Delete on long press
+        child: Row(
+          children: [
+            // Custom Checkbox
+            GestureDetector(
+              onTap: () async {
+                await _dbHelper.toggleCalendarTask(task['id'], isDone);
+                _refreshTasks(); // Refresh UI after database change
+              },
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isDone ? themeColor : Colors.white,
+                  border: Border.all(color: themeColor, width: 2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: isDone
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                    : null,
+              ),
             ),
+            const SizedBox(width: 14),
+            // Task Text
+            Expanded(
+              child: Text(
+                task['task'],
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDone ? Colors.black38 : Colors.black87,
+                  decoration: isDone ? TextDecoration.lineThrough : null,
+                ),
+              ),
+            ),
+            // Individual delete button
+            IconButton(
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 20,
+                color: Colors.black26,
+              ),
+              onPressed: () => _confirmDelete(task['id']),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(int id) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Task?"),
+        content: const Text(
+          "This will remove the task from your schedule and history.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
           ),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              color: isStrikethrough ? Colors.black38 : Colors.black87,
-              decoration: isStrikethrough ? TextDecoration.lineThrough : null,
-            ),
+          TextButton(
+            onPressed: () async {
+              await _dbHelper.deleteCalendarTask(id);
+              Navigator.pop(context);
+              _refreshTasks();
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

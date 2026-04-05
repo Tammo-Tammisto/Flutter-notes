@@ -17,7 +17,7 @@ class StudyAlertService {
       windows: WindowsInitializationSettings(
         appName: 'StudyAssistant',
         appUserModelId: 'com.example.study_assistant',
-        guid: 'your-unique-guid-here-12345', 
+        guid: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', 
       ),
     );
 
