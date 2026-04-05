@@ -1,19 +1,47 @@
 import 'package:flutter/material.dart';
+import '../services/database_helper.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final DatabaseHelper _dbHelper = DatabaseHelper();
+  List<Map<String, dynamic>> _todayTasks = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayTasks();
+  }
+
+  // Fetches tasks from the database for the current date
+  Future<void> _loadTodayTasks() async {
+    DateTime now = DateTime.now();
+    // Format must match the format used in CalendarScreen: YYYY-MM-DD
+    String dateStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final tasks = await _dbHelper.getTasksForDate(dateStr);
+    setState(() {
+      _todayTasks = tasks;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // LEFT SIDE: Pinned Notes & Recent Activity
+        // LEFT SIDE: Pinned Notes & Today's Calendar Tasks
         Expanded(
           flex: 2,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // TOP ROW: Pinned Note Cards
+              // TOP ROW: Pinned Note Cards (Placeholders)
               Row(
                 children: [
                   _buildTopCard(
@@ -35,33 +63,74 @@ class DashboardScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              // RECENT ACTIVITY PANEL
+
+              // TODO: Task checkmarks
+              // TODAY'S CALENDAR TASKS PANEL
               Expanded(
                 child: Container(
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7F76B3),
+                    color: const Color(
+                      0xFF7F76B3,
+                    ), // Your original purple theme
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Recent activity",
-                        style: TextStyle(fontSize: 20, color: Colors.white),
+                        "Today's Schedule",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF0F5),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          // Placeholder for your recent activity lists
-                          child: const Center(
-                            child: Text("Activity Lists go here"),
-                          ),
-                        ),
+                        child: _todayTasks.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  "No tasks scheduled for today.",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _todayTasks.length,
+                                itemBuilder: (context, index) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.calendar_today_rounded,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            _todayTasks[index]['task'],
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -71,58 +140,79 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 16),
-        // RIGHT SIDE: Today's To-Do List
+
+        // RIGHT SIDE: Profile and Cookies
         Expanded(
-          flex: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF7F76B3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    "Todays To-do list",
-                    style: TextStyle(fontSize: 20, color: Colors.white),
-                  ),
+          child: Column(
+            children: [
+              // Penguin Profile / Welcome
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFDFDF),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFFF0F5),
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
+                child: Column(
+                  children: [
+                    const CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.white,
+                      child: Icon(
+                        Icons.face,
+                        size: 40,
+                        color: Colors.pinkAccent,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Here is where you will conditionally show your items OR the empty state
-                        const Text(
-                          "Nothing to do today!",
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 20),
-                        // Empty state penguin
-                        Container(
-                          height: 150,
-                          width: 150,
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: Text("Penguin Cookie Image"),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Hi Penguin!",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    Text(
+                      "You have ${_todayTasks.length} tasks today",
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Cookie Counter Panel
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "Cookie Jar",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 120,
+                        height: 120,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Text("Penguin Cookie Image"),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -152,9 +242,7 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 4),
             Expanded(
               child: isImageCard
-                  ? const Center(
-                      child: Text("Fishbowl Img"),
-                    ) // Replace with Image.asset
+                  ? const Center(child: Text("Fishbowl Img"))
                   : Text(
                       content,
                       style: const TextStyle(

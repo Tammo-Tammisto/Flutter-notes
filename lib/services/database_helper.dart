@@ -54,6 +54,34 @@ class DatabaseHelper {
         height REAL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE calendar_tasks(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task TEXT,
+        date TEXT -- Format: YYYY-MM-DD
+      )
+    ''');
+  }
+
+  Future<void> insertCalendarTask(String task, String date) async {
+    final db = await database;
+    await db.insert('calendar_tasks', {'task': task, 'date': date});
+  }
+
+  Future<List<Map<String, dynamic>>> getTasksForDate(String date) async {
+    final db = await database;
+    return await db.query(
+      'calendar_tasks',
+      where: 'date = ?',
+      whereArgs: [date],
+    );
+  }
+
+  // Add this to database_helper.dart
+  Future<void> deleteCalendarTask(int id) async {
+    final db = await database;
+    await db.delete('calendar_tasks', where: 'id = ?', whereArgs: [id]);
   }
 
   // --- Notebook Persistence Methods ---

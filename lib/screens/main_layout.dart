@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'dart:async'; // Required for the Timer
+import 'dart:async';
 import 'dashboard_screen.dart';
 import 'bookshelf_screen.dart';
 import 'todo_screen.dart';
-import '../services/notification_service.dart'; // Import the notification service
+import 'calendar_screen.dart';
+import '../services/notification_service.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({Key? key}) : super(key: key);
@@ -19,8 +20,8 @@ class _MainLayoutState extends State<MainLayout> {
     const DashboardScreen(),
     const BookshelfScreen(),
     const TodoScreen(),
-    const Center(child: Text("Calendar Coming Soon")),
-    const Center(child: Text("Stickers Coming Soon")),
+    const CalendarScreen(),
+    //const Center(child: Text("Stickers Coming Soon")),
   ];
 
   @override
@@ -39,30 +40,37 @@ class _MainLayoutState extends State<MainLayout> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
+                // Stretch ensures the timer doesn't cause width calculation errors
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 40),
-                  const CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.white,
-                    child: Text("Logo"),
+                  const Center(
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.white,
+                      child: Text("Logo"),
+                    ),
                   ),
                   const SizedBox(height: 40),
                   _buildNavItem(0, "Dashboard"),
                   _buildNavItem(1, "Bookshelf"),
                   _buildNavItem(2, "To-Do list"),
                   _buildNavItem(3, "Calendar"),
-                  _buildNavItem(4, "Stickers"),
+                  //_buildNavItem(4, "Stickers"),
 
-                  // Pushes the timer to the bottom
                   const Spacer(),
 
-                  // THE TIMER WIDGET
-                  const SidebarTimer(),
+                  // THE TIMER WIDGET - Wrapped to prevent overflow
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: SidebarTimer(),
+                  ),
                   const SizedBox(height: 20),
                 ],
               ),
             ),
             const SizedBox(width: 16),
+            // MAIN CONTENT AREA
             Expanded(child: _screens[_selectedIndex]),
           ],
         ),
@@ -120,10 +128,8 @@ class _SidebarTimerState extends State<SidebarTimer> {
           setState(() => _secondsRemaining--);
         } else {
           _stopTimer();
-
-          // TRIGGER SYSTEM ALERT
+          // Trigger the Sound and Notification
           StudyAlertService.showAlert();
-
           _showTimeUpDialog();
         }
       });
@@ -177,7 +183,6 @@ class _SidebarTimerState extends State<SidebarTimer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.6),
@@ -185,6 +190,7 @@ class _SidebarTimerState extends State<SidebarTimer> {
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min, // Prevents infinite height expansion
         children: [
           const Text(
             "STUDY TIMER",
@@ -195,32 +201,30 @@ class _SidebarTimerState extends State<SidebarTimer> {
             ),
           ),
           const SizedBox(height: 10),
-
-          // Display Area
           GestureDetector(
             onTap: _isRunning ? null : _showSetTimeDialog,
             child: Text(
               _formatTime(),
               style: TextStyle(
-                fontSize: 36,
+                fontSize:
+                    32, // Reduced slightly to ensure it fits the 250px sidebar
                 fontWeight: FontWeight.bold,
                 color: _isRunning ? Colors.deepPurple : Colors.black87,
                 fontFamily: 'monospace',
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // Controls
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircleAvatar(
+                radius: 18,
                 backgroundColor: _isRunning
                     ? Colors.orangeAccent
                     : Colors.greenAccent,
                 child: IconButton(
+                  iconSize: 18,
                   icon: Icon(
                     _isRunning ? Icons.pause : Icons.play_arrow,
                     color: Colors.white,
@@ -228,20 +232,19 @@ class _SidebarTimerState extends State<SidebarTimer> {
                   onPressed: _isRunning ? _stopTimer : _startTimer,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               CircleAvatar(
+                radius: 18,
                 backgroundColor: Colors.grey[300],
                 child: IconButton(
+                  iconSize: 18,
                   icon: const Icon(Icons.refresh, color: Colors.black54),
                   onPressed: _resetTimer,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 15),
-
-          // Quick Presets
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [_presetButton(15), _presetButton(25), _presetButton(50)],
@@ -255,14 +258,14 @@ class _SidebarTimerState extends State<SidebarTimer> {
     return InkWell(
       onTap: () => _setQuickTime(mins),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
           "${mins}m",
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -276,6 +279,7 @@ class _SidebarTimerState extends State<SidebarTimer> {
         content: TextField(
           controller: _minController,
           keyboardType: TextInputType.number,
+          autofocus: true,
           decoration: const InputDecoration(
             hintText: "Enter minutes (e.g. 25)",
           ),
