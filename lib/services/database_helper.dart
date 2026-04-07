@@ -72,6 +72,113 @@ class DatabaseHelper {
         timestamp TEXT
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE todo_categories(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        color INTEGER
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE categorized_todos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER,
+        task TEXT,
+        isDone INTEGER DEFAULT 0,
+        FOREIGN KEY (categoryId) REFERENCES todo_categories (id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  Future<int> insertCategory(String name, int color) async {
+    final db = await database;
+    int id = await db.insert('todo_categories', {'name': name, 'color': color});
+    await logActivity(
+      "Created tab: '$name'",
+    ); // This adds the activity to dashboard
+    return id;
+  }
+
+  Future<void> insertCategorizedTodo(int categoryId, String task) async {
+    final db = await database;
+
+    // 1. Fetch the category name so we can say "Added X to Tab Y"
+    final List<Map<String, dynamic>> category = await db.query(
+      'todo_categories',
+      columns: ['name'],
+      where: 'id = ?',
+      whereArgs: [categoryId],
+    );
+
+    String tabName = category.isNotEmpty
+        ? category.first['name']
+        : "Unknown Tab";
+
+    // 2. Insert the task
+    await db.insert('categorized_todos', {
+      'categoryId': categoryId,
+      'task': task,
+      'isDone': 0,
+    });
+
+    // 3. Log detailed activity
+    await logActivity("Added '$task' to tab '$tabName'");
+  }
+
+  Future<void> toggleTodoStatus(int id, bool isDone) async {
+    final db = await database;
+
+    // 1. Join with todo_categories to get both the Task name and the Tab name
+    final List<Map<String, dynamic>> result = await db.rawQuery(
+      '''
+      SELECT t.task, c.name as tabName 
+      FROM categorized_todos t
+      JOIN todo_categories c ON t.categoryId = c.id
+      WHERE t.id = ?
+    ''',
+      [id],
+    );
+
+    String taskName = "Task";
+    String tabName = "Tab";
+
+    if (result.isNotEmpty) {
+      taskName = result.first['task'];
+      tabName = result.first['tabName'];
+    }
+
+    // 2. Update the status
+    await db.update(
+      'categorized_todos',
+      {'isDone': isDone ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    // 3. Log detailed activity
+    await logActivity(
+      isDone
+          ? "Checked '$taskName' in '$tabName'"
+          : "Unchecked '$taskName' in '$tabName'",
+    );
+  }
+
+  // --- Keep your existing getCategories and getTodosForCategory ---
+
+  Future<List<Map<String, dynamic>>> getCategories() async {
+    final db = await database;
+    return await db.query('todo_categories');
+  }
+
+  Future<List<Map<String, dynamic>>> getTodosForCategory(int categoryId) async {
+    final db = await database;
+    return await db.query(
+      'categorized_todos',
+      where: 'categoryId = ?',
+      whereArgs: [categoryId],
+    );
   }
 
   // --- NEW: Logging Method ---
@@ -90,7 +197,7 @@ class DatabaseHelper {
     return await db.query(
       'recent_activity',
       orderBy: 'timestamp DESC',
-      limit: 15,
+      limit: 150,
     );
   }
 
@@ -218,30 +325,57 @@ class DatabaseHelper {
   ) async {
     final db = await database;
 
-    // 1. Get the notebook title to make the log entry look nice
-    final List<Map<String, dynamic>> nb = await db.query(
-      'notebooks',
-      columns: ['title'],
-      where: 'id = ?',
-      whereArgs: [notebookId],
-    );
-    String nbTitle = nb.isNotEmpty ? nb.first['title'] : "Notebook";
-
-    // 2. Perform the update
-    await db.delete(
+    // 1. Fetch existing items to compare
+    final List<Map<String, dynamic>> existingItems = await db.query(
       'notebook_items',
       where: 'notebookId = ?',
       whereArgs: [notebookId],
     );
 
-    for (var item in items) {
-      await db.insert('notebook_items', {'notebookId': notebookId, ...item});
-    }
+    // 2. Compare the lists
+    // We remove the 'id' and 'notebookId' from existing items for a fair comparison,
+    // as the incoming 'items' list doesn't have those yet.
+    final existingDataOnly = existingItems.map((item) {
+      final copy = Map<String, dynamic>.from(item);
+      copy.remove('id');
+      copy.remove('notebookId');
+      return copy.toString();
+    }).toList();
 
-    // 3. Log that the contents were updated
-    // Note: To avoid spamming, we only log "Updated elements"
-    // This handles adding/deleting/moving items inside
-    await logActivity("Edited: '$nbTitle'");
+    final incomingDataOnly = items.map((item) => item.toString()).toList();
+
+    // Check if the content is exactly the same (length and items)
+    bool isChanged =
+        existingDataOnly.length != incomingDataOnly.length ||
+        !existingDataOnly.every(
+          (element) => incomingDataOnly.contains(element),
+        );
+
+    // 3. Only proceed if there is an actual change
+    if (isChanged) {
+      // Get title for the log
+      final List<Map<String, dynamic>> nb = await db.query(
+        'notebooks',
+        columns: ['title'],
+        where: 'id = ?',
+        whereArgs: [notebookId],
+      );
+      String nbTitle = nb.isNotEmpty ? nb.first['title'] : "Notebook";
+
+      // Perform the update
+      await db.delete(
+        'notebook_items',
+        where: 'notebookId = ?',
+        whereArgs: [notebookId],
+      );
+
+      for (var item in items) {
+        await db.insert('notebook_items', {'notebookId': notebookId, ...item});
+      }
+
+      // 4. Log only because something actually moved or changed
+      await logActivity("Edited: '$nbTitle'");
+    }
   }
 
   Future<List<Map<String, dynamic>>> getNotebookItems(String notebookId) async {
