@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_notes/services/database_helper.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class NotebookItemData {
   String type;
@@ -195,7 +197,15 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
                   _items[idx].size = size;
                   _saveToDatabase();
                 },
-                onDelete: () {
+                // Update the onDelete logic inside the ListView/Stack
+                onDelete: () async {
+                  if (_items[idx].type == 'image') {
+                    final file = File(_items[idx].content);
+                    if (await file.exists()) {
+                      await file
+                          .delete(); // Remove the physical file from app storage
+                    }
+                  }
                   setState(() => _items.removeAt(idx));
                   _saveToDatabase();
                 },
@@ -340,11 +350,37 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
     );
+
     if (result != null && result.files.single.path != null) {
+      File originalFile = File(result.files.single.path!);
+
+      // 1. Get the application documents directory
+      final appDir = await getApplicationDocumentsDirectory();
+
+      // 2. Define the sub-folder path
+      final String folderPath = p.join(appDir.path, 'notebook_images');
+      final Directory imageFolder = Directory(folderPath);
+
+      // 3. Create the folder if it doesn't exist
+      if (!await imageFolder.exists()) {
+        await imageFolder.create(recursive: true);
+      }
+
+      // 4. Create a unique filename
+      String fileName =
+          "${DateTime.now().millisecondsSinceEpoch}_${p.basename(originalFile.path)}";
+
+      // 5. Define the final destination path
+      String newPath = p.join(folderPath, fileName);
+
+      // 6. Copy the file
+      File savedFile = await originalFile.copy(newPath);
+
+      // 7. Add to UI and Database
       _addItem(
         NotebookItemData(
           type: 'image',
-          content: result.files.single.path!,
+          content: savedFile.path,
           position: const Offset(50, 50),
           size: const Size(150, 150),
         ),
