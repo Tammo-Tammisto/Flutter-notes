@@ -96,7 +96,7 @@ class DatabaseHelper {
     final db = await database;
     int id = await db.insert('todo_categories', {'name': name, 'color': color});
     await logActivity(
-      "Created tab: '$name'",
+      "Created to-do list: '$name'",
     ); // This adds the activity to dashboard
     return id;
   }
@@ -124,7 +124,50 @@ class DatabaseHelper {
     });
 
     // 3. Log detailed activity
-    await logActivity("Added '$task' to tab '$tabName'");
+    await logActivity("Added '$task' to to-do list '$tabName'");
+  }
+
+  Future<void> deleteCategory(int id, String name) async {
+    final db = await database;
+
+    // Delete tasks first
+    await db.delete(
+      'categorized_todos',
+      where: 'categoryId = ?',
+      whereArgs: [id],
+    );
+
+    // Delete category
+    await db.delete('todo_categories', where: 'id = ?', whereArgs: [id]);
+
+    await logActivity("Deleted to-do list: '$name'");
+  }
+
+  Future<void> deleteCategorizedTodo(int id) async {
+    final db = await database;
+
+    // Fetch task name for logging
+    final List<Map<String, dynamic>> result = await db.rawQuery(
+      '''
+    SELECT t.task, c.name as tabName 
+    FROM categorized_todos t
+    JOIN todo_categories c ON t.categoryId = c.id
+    WHERE t.id = ?
+  ''',
+      [id],
+    );
+
+    String taskName = "Task";
+    String tabName = "Tab";
+
+    if (result.isNotEmpty) {
+      taskName = result.first['task'];
+      tabName = result.first['tabName'];
+    }
+
+    await db.delete('categorized_todos', where: 'id = ?', whereArgs: [id]);
+
+    await logActivity("Deleted '$taskName' from '$tabName'");
   }
 
   Future<void> toggleTodoStatus(int id, bool isDone) async {

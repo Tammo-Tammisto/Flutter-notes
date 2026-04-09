@@ -1,6 +1,7 @@
-import 'dart:ui'; // Required for PointerDeviceKind
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/database_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TodoScreen extends StatefulWidget {
   const TodoScreen({Key? key}) : super(key: key);
@@ -22,12 +23,22 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIndex = prefs.getInt('last_todo_tab') ?? 0;
+
     final cats = await _dbHelper.getCategories();
+
     setState(() {
       _categories = cats;
-      if (_selectedTabIndex >= _categories.length && _categories.isNotEmpty) {
+
+      if (_categories.isEmpty) {
+        _selectedTabIndex = 0;
+      } else if (savedIndex < _categories.length) {
+        _selectedTabIndex = savedIndex;
+      } else {
         _selectedTabIndex = 0;
       }
+
       _isLoading = false;
     });
   }
@@ -57,6 +68,32 @@ class _TodoScreenState extends State<TodoScreen> {
               }
             },
             child: const Text("Create"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteCategory(int id, String name) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete '$name'?"),
+        content: const Text(
+          "This will delete the tab and all tasks inside it.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _dbHelper.deleteCategory(id, name);
+              Navigator.pop(context);
+              await _loadData();
+            },
+            child: const Text("Delete"),
           ),
         ],
       ),
@@ -109,7 +146,6 @@ class _TodoScreenState extends State<TodoScreen> {
           // --- TAB BAR ROW ---
           Row(
             children: [
-              // 1. SCROLLABLE AREA (Takes all available space except the + button)
               Expanded(
                 child: ScrollConfiguration(
                   behavior: const MaterialScrollBehavior().copyWith(
@@ -124,29 +160,50 @@ class _TodoScreenState extends State<TodoScreen> {
                         var cat = entry.value;
                         bool isSelected = _selectedTabIndex == idx;
 
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedTabIndex = idx),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 12),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Color(cat['color'])
-                                  : Colors.white.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            child: Text(
-                              cat['name'],
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: isSelected
-                                    ? Colors.black87
-                                    : Colors.white,
+                        return Container(
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Color(cat['color'])
+                                : Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () async {
+                                  setState(() => _selectedTabIndex = idx);
+
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  prefs.setInt('last_todo_tab', idx);
+                                },
+
+                                child: Text(
+                                  cat['name'],
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected
+                                        ? Colors.black87
+                                        : Colors.white,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () =>
+                                    _deleteCategory(cat['id'], cat['name']),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }).toList(),
@@ -155,7 +212,6 @@ class _TodoScreenState extends State<TodoScreen> {
                 ),
               ),
 
-              // 2. PINNED ADD BUTTON (Always visible on the right)
               const SizedBox(width: 8),
               IconButton(
                 onPressed: _addNewCategory,
@@ -196,6 +252,7 @@ class _TodoScreenState extends State<TodoScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // HEADER
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -210,7 +267,7 @@ class _TodoScreenState extends State<TodoScreen> {
                                 ),
                                 IconButton(
                                   icon: const Icon(
-                                    Icons.add_task,
+                                    Icons.add_box_outlined,
                                     size: 28,
                                     color: Color(0xFF7F76B3),
                                   ),
@@ -222,21 +279,61 @@ class _TodoScreenState extends State<TodoScreen> {
                               ],
                             ),
                             const Divider(),
+
+                            // TASK LIST
                             Expanded(
                               child: ListView.builder(
                                 itemCount: tasks.length,
                                 itemBuilder: (context, index) {
                                   final task = tasks[index];
-                                  return CheckboxListTile(
-                                    title: Text(task['task']),
-                                    value: task['isDone'] == 1,
-                                    onChanged: (val) async {
-                                      await _dbHelper.toggleTodoStatus(
-                                        task['id'],
-                                        val!,
-                                      );
-                                      setState(() {});
-                                    },
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: task['isDone'] == 1
+                                          ? Colors.black.withOpacity(0.05)
+                                          : Colors.black.withOpacity(0.10),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ListTile(
+                                      leading: Checkbox(
+                                        value: task['isDone'] == 1,
+                                        onChanged: (val) async {
+                                          await _dbHelper.toggleTodoStatus(
+                                            task['id'],
+                                            val!,
+                                          );
+                                          setState(() {});
+                                        },
+                                      ),
+                                      title: Text(
+                                        task['task'],
+                                        style: TextStyle(
+                                          color: task['isDone'] == 1
+                                              ? Colors.black45
+                                              : Colors.black87,
+                                          decoration: task['isDone'] == 1
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(
+                                          Icons.delete,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () async {
+                                          await _dbHelper.deleteCategorizedTodo(
+                                            task['id'],
+                                          );
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ),
                                   );
                                 },
                               ),
