@@ -11,6 +11,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  List<Map<String, dynamic>> _stickies = [];
   List<Map<String, dynamic>> _todayTasks = [];
   List<Map<String, dynamic>> _recentActivity = [];
   Timer? _refreshTimer;
@@ -49,27 +50,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String dateStr = _getDateString();
     final tasks = await _dbHelper.getTasksForDate(dateStr);
     final activity = await _dbHelper.getRecentActivity();
+    final stickies = await _dbHelper.getDashboardStickies();
 
     setState(() {
       _todayTasks = tasks;
-      // Group consecutive identical activities
       _recentActivity = _groupActivities(activity);
+      _stickies = stickies;
     });
   }
 
-  // Helper function to group consecutive identical rows
-  List<Map<String, dynamic>> _groupActivities(
-    List<Map<String, dynamic>> rawActivity,
-  ) {
-    if (rawActivity.isEmpty) return [];
+  List<Map<String, dynamic>> _groupActivities(List<Map<String, dynamic>> raw) {
+    if (raw.isEmpty) return [];
 
     List<Map<String, dynamic>> grouped = [];
 
-    for (var row in rawActivity) {
+    for (var row in raw) {
       if (grouped.isEmpty) {
         grouped.add({...row, 'count': 1});
       } else {
-        // Compare description with the last item added to grouped list
         if (grouped.last['description'] == row['description']) {
           grouped.last['count']++;
         } else {
@@ -82,36 +80,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        // LEFT SIDE: Pinned Notes & Today's Calendar Tasks
+        // TOP ROW — 6 FULL-WIDTH STICKY NOTES
+        Row(
+          children: List.generate(6, (index) {
+            if (index < _stickies.length) {
+              return _buildStickyCard(_stickies[index]);
+            } else {
+              return _buildEmptyStickySlot(index);
+            }
+          }),
+        ),
+
+        const SizedBox(height: 16),
+
+        // BOTTOM AREA — TWO COLUMNS
         Expanded(
-          flex: 2,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  _buildTopCard(
-                    const Color(0xFFD6B5D8),
-                    "Title space",
-                    "Lorem ipsum dolor sit amet...",
-                  ),
-                  const SizedBox(width: 16),
-                  _buildTopCard(
-                    const Color(0xFFD6B5D8),
-                    "",
-                    "Something important..",
-                    isImageCard: true,
-                  ),
-                  const SizedBox(width: 16),
-                  _buildTopCard(const Color(0xFFD6B5D8), "", ""),
-                  const SizedBox(width: 16),
-                  _buildTopCard(const Color(0xFFD6B5D8), "", ""),
-                ],
-              ),
-              const SizedBox(height: 16),
+              // LEFT — TODAY'S SCHEDULE
               Expanded(
+                flex: 2,
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -146,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 itemBuilder: (context, index) {
                                   final task = _todayTasks[index];
                                   bool isDone = task['isDone'] == 1;
+
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
                                     padding: const EdgeInsets.symmetric(
@@ -198,51 +189,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        // RIGHT SIDE: Profile and Recent Activity
-        Expanded(
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFDFDF),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  children: [
-                    const CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.white,
-                      child: Icon(
-                        Icons.face,
-                        size: 40,
-                        color: Colors.pinkAccent,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      "Hi Penguin!",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      "You have ${_todayTasks.length} tasks today",
-                      style: const TextStyle(color: Colors.black54),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
+
+              const SizedBox(width: 16),
+
+              // RIGHT — RECENT ACTIVITY
               Expanded(
+                flex: 1,
                 child: Container(
-                  width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.4),
@@ -334,38 +287,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTopCard(
-    Color color,
-    String title,
-    String content, {
-    bool isImageCard = false,
-  }) {
+  // EMPTY SLOT (shows + button)
+  Widget _buildEmptyStickySlot(int index) {
     return Expanded(
-      child: Container(
-        height: 150,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (title.isNotEmpty)
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Expanded(
-              child: isImageCard
-                  ? const Center(child: Text("Fishbowl Img"))
-                  : Text(
-                      content,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.black54,
-                      ),
-                    ),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: GestureDetector(
+          onTap: () async {
+            await _dbHelper.insertDashboardSticky("Title", "", 0xFFD6B5D8);
+            _loadDashboardData();
+          },
+          child: Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white30),
             ),
-          ],
+            child: const Center(
+              child: Icon(Icons.add, color: Colors.white70, size: 32),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // FILLED STICKY NOTE
+  Widget _buildStickyCard(Map<String, dynamic> sticky) {
+    TextEditingController titleCtrl = TextEditingController(
+      text: sticky['title'],
+    );
+    TextEditingController contentCtrl = TextEditingController(
+      text: sticky['content'],
+    );
+
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          margin: const EdgeInsets.only(right: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Color(sticky['color']),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: "Title",
+                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                onChanged: (val) {
+                  _dbHelper.updateDashboardSticky(
+                    sticky['id'],
+                    val,
+                    contentCtrl.text,
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: TextField(
+                  controller: contentCtrl,
+                  maxLines: null,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: "Write something...",
+                  ),
+                  onChanged: (val) {
+                    _dbHelper.updateDashboardSticky(
+                      sticky['id'],
+                      titleCtrl.text,
+                      val,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

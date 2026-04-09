@@ -23,13 +23,12 @@ class DatabaseHelper {
   Future<void> _onCreate(Database db, int version) async {
     // Original notes table (Dashboard)
     await db.execute('''
-      CREATE TABLE notes(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        content TEXT,
-        color TEXT,
-        dateTime TEXT
-      )
+          CREATE TABLE dashboard_stickies(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      content TEXT,
+      color INTEGER
+    )
     ''');
 
     // Table for Notebooks (The books on the shelf)
@@ -430,36 +429,40 @@ class DatabaseHelper {
     );
   }
 
-  // --- Sticky Note Methods ---
-  Future<int> insertNote(Note note) async {
+  Future<List<Map<String, dynamic>>> getDashboardStickies() async {
     final db = await database;
-    int id = await db.insert('notes', note.toMap());
-    await logActivity("Created new note: '${note.title}'");
-    return id;
+    return await db.query('dashboard_stickies');
   }
 
-  Future<List<Note>> getNotes() async {
+  Future<int> insertDashboardSticky(
+    String title,
+    String content,
+    int color,
+  ) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('notes');
-    return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
+    return await db.insert('dashboard_stickies', {
+      'title': title,
+      'content': content,
+      'color': color,
+    });
   }
 
-  Future<int> updateNote(Note note) async {
+  Future<void> updateDashboardSticky(
+    int id,
+    String title,
+    String content,
+  ) async {
     final db = await database;
-    int count = await db.update(
-      'notes',
-      note.toMap(),
+    await db.update(
+      'dashboard_stickies',
+      {'title': title, 'content': content},
       where: 'id = ?',
-      whereArgs: [note.id],
+      whereArgs: [id],
     );
-    await logActivity("Updated note: '${note.title}'");
-    return count;
   }
 
-  Future<int> deleteNote(int id) async {
+  Future<void> deleteDashboardSticky(int id) async {
     final db = await database;
-    int count = await db.delete('notes', where: 'id = ?', whereArgs: [id]);
-    await logActivity("Deleted a note");
-    return count;
+    await db.delete('dashboard_stickies', where: 'id = ?', whereArgs: [id]);
   }
 }
