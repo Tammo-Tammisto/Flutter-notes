@@ -50,6 +50,8 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
   late String _currentTitle;
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
+  final Size _canvasSize = const Size(1920, 880);
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +91,7 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
     TextEditingController renameController = TextEditingController(
       text: _currentTitle,
     );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -116,6 +119,69 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
     );
   }
 
+  void _showHowToUseDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.lightbulb_outline, color: Colors.orange),
+              SizedBox(width: 10),
+              Text("How to Use"),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Click the bottom icons to add items."),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("   "),
+                  Icon(Icons.note_add, size: 18),
+                  Text(" icon to add a sticky note."),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("   "),
+                  Icon(Icons.image, size: 18),
+                  Text(" icon to add an image."),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Text("   "),
+                  Icon(Icons.text_fields, size: 18),
+                  Text(" icon, then click anywhere to place text."),
+                ],
+              ),
+              SizedBox(height: 8),
+              Text("• Drag items to move them around."),
+              SizedBox(height: 8),
+              Text("• Click and hold an item to delete it."),
+              SizedBox(height: 8),
+              Text("• Click the title in the top left to rename."),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Got it!"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _addItem(NotebookItemData newItem) {
     setState(() => _items.add(newItem));
     _saveToDatabase();
@@ -124,7 +190,7 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[300],
       appBar: AppBar(
         backgroundColor: widget.bookColor,
         elevation: 0,
@@ -137,81 +203,77 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
         ),
         title: InkWell(
           onTap: _renameNotebook,
-          borderRadius: BorderRadius.circular(8), // Adds a nice ripple shape
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-            child: Row(
-              mainAxisSize:
-                  MainAxisSize.min, // Prevents the Row from taking full width
-              children: [
-                Text(
-                  _currentTitle,
-                  style: const TextStyle(color: Colors.black87),
-                ),
-                const SizedBox(width: 8), // Space between title and icon
-                const Icon(
-                  Icons.edit, // Or Icons.drive_file_rename_outline
-                  size: 18,
-                  color: Colors.black54,
-                ),
-              ],
-            ),
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _currentTitle,
+                style: const TextStyle(color: Colors.black87),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.edit, size: 18, color: Colors.black54),
+            ],
           ),
         ),
-        actions: <Widget>[
+        actions: [
           IconButton(
             icon: const Icon(Icons.info_outline, color: Colors.black87),
-            tooltip: "How to Use",
             onPressed: _showHowToUseDialog,
           ),
         ],
       ),
-      body: GestureDetector(
-        onTapDown: (details) {
-          if (_isWaitingForTextPlacement) {
-            _addItem(
-              NotebookItemData(
-                type: 'text',
-                content: 'New Text',
-                position: details.localPosition,
-                size: const Size(200, 80),
+      body: Center(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: GestureDetector(
+            onTapDown: (details) {
+              if (_isWaitingForTextPlacement) {
+                _addItem(
+                  NotebookItemData(
+                    type: 'text',
+                    content: 'New Text',
+                    position: details.localPosition,
+                    size: const Size(200, 80),
+                  ),
+                );
+                setState(() => _isWaitingForTextPlacement = false);
+              }
+            },
+            child: Container(
+              width: _canvasSize.width,
+              height: _canvasSize.height,
+              color: const Color(0xFFF5F5F5),
+              child: Stack(
+                children: _items.asMap().entries.map((entry) {
+                  int idx = entry.key;
+                  final item = _items[idx];
+
+                  return DraggableItem(
+                    key: ObjectKey(item),
+                    initialPosition: item.position,
+                    initialSize: item.size,
+                    canvasSize: _canvasSize,
+                    isResizable: true,
+                    maintainAspectRatio: item.type == 'image',
+                    onUpdate: (pos, size) {
+                      item.position = pos;
+                      item.size = size;
+                      _saveToDatabase();
+                    },
+                    onDelete: () async {
+                      if (item.type == 'image') {
+                        final file = File(item.content);
+                        if (await file.exists()) await file.delete();
+                      }
+                      setState(() => _items.removeAt(idx));
+                      _saveToDatabase();
+                    },
+                    child: _buildItemContent(item, idx),
+                  );
+                }).toList(),
               ),
-            );
-            setState(() => _isWaitingForTextPlacement = false);
-          }
-        },
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: const Color(0xFFF5F5F5),
-          child: Stack(
-            children: _items.asMap().entries.map((entry) {
-              int idx = entry.key;
-              return DraggableItem(
-                key: ObjectKey(_items[idx]), // Use ObjectKey to maintain state
-                initialPosition: _items[idx].position,
-                initialSize: _items[idx].size,
-                isResizable: _items[idx].type == 'image',
-                onUpdate: (pos, size) {
-                  _items[idx].position = pos;
-                  _items[idx].size = size;
-                  _saveToDatabase();
-                },
-                // Update the onDelete logic inside the ListView/Stack
-                onDelete: () async {
-                  if (_items[idx].type == 'image') {
-                    final file = File(_items[idx].content);
-                    if (await file.exists()) {
-                      await file
-                          .delete(); // Remove the physical file from app storage
-                    }
-                  }
-                  setState(() => _items.removeAt(idx));
-                  _saveToDatabase();
-                },
-                child: _buildItemContent(_items[idx], idx),
-              );
-            }).toList(),
+            ),
           ),
         ),
       ),
@@ -242,75 +304,10 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
     );
   }
 
-  void _showHowToUseDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.lightbulb_outline, color: Colors.orange),
-              SizedBox(width: 10),
-              Text("How to Use"),
-            ],
-          ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min, // Constrains height to content
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Click the bottom icons to add items."),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Text("   "),
-                  Icon(Icons.note_add, size: 18),
-                  Text(" icon to add a sticky note."),
-                ],
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Text("   "),
-                  Icon(Icons.image, size: 18),
-                  Text(" icon to add an image."),
-                ],
-              ),
-              SizedBox(height: 8),
-              Row(
-                children: [
-                  Text("   "),
-                  Icon(Icons.text_fields, size: 18),
-                  Text(" icon, then click anywhere to place text."),
-                ],
-              ),
-              //Text("• Tap " + Icons.text_fields + " icon, then tap anywhere to place text."),
-              SizedBox(height: 8),
-              SizedBox(height: 8),
-              Text("• Drag items to move them around."),
-              SizedBox(height: 8),
-              Text("• Click and hold an item to delete it."),
-              SizedBox(height: 8),
-              Text("• Click the title in the top left to rename."),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Got it!"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildItemContent(NotebookItemData item, int index) {
     if (item.type == 'image') {
       return item.content.isNotEmpty
-          ? Image.file(File(item.content), fit: BoxFit.cover)
+          ? Image.file(File(item.content), fit: BoxFit.fill)
           : const Icon(Icons.broken_image);
     }
 
@@ -332,16 +329,11 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
           ),
         ),
         maxLines: null,
-        style: const TextStyle(fontSize: 14),
+        onChanged: (val) => _items[index].content = val,
         decoration: const InputDecoration(
           border: InputBorder.none,
           isDense: true,
         ),
-        onChanged: (val) {
-          _items[index].content = val;
-          // We don't call _saveToDatabase on every keystroke to prevent lag;
-          // it saves when moved, resized, or exiting.
-        },
       ),
     );
   }
@@ -354,35 +346,31 @@ class _NotebookViewScreenState extends State<NotebookViewScreen> {
     if (result != null && result.files.single.path != null) {
       File originalFile = File(result.files.single.path!);
 
-      // 1. Get the application documents directory
       final appDir = await getApplicationDocumentsDirectory();
+      final folderPath = p.join(appDir.path, 'notebook_images');
 
-      // 2. Define the sub-folder path
-      final String folderPath = p.join(appDir.path, 'notebook_images');
-      final Directory imageFolder = Directory(folderPath);
-
-      // 3. Create the folder if it doesn't exist
-      if (!await imageFolder.exists()) {
-        await imageFolder.create(recursive: true);
+      if (!await Directory(folderPath).exists()) {
+        await Directory(folderPath).create(recursive: true);
       }
 
-      // 4. Create a unique filename
       String fileName =
           "${DateTime.now().millisecondsSinceEpoch}_${p.basename(originalFile.path)}";
-
-      // 5. Define the final destination path
       String newPath = p.join(folderPath, fileName);
 
-      // 6. Copy the file
       File savedFile = await originalFile.copy(newPath);
 
-      // 7. Add to UI and Database
+      final data = await savedFile.readAsBytes();
+      final image = await decodeImageFromList(data);
+
+      double initialWidth = 200.0;
+      double initialHeight = (image.height / image.width) * initialWidth;
+
       _addItem(
         NotebookItemData(
           type: 'image',
           content: savedFile.path,
           position: const Offset(50, 50),
-          size: const Size(150, 150),
+          size: Size(initialWidth, initialHeight),
         ),
       );
     }
@@ -393,7 +381,9 @@ class DraggableItem extends StatefulWidget {
   final Widget child;
   final Offset initialPosition;
   final Size initialSize;
+  final Size canvasSize;
   final bool isResizable;
+  final bool maintainAspectRatio;
   final Function(Offset, Size) onUpdate;
   final VoidCallback onDelete;
 
@@ -402,9 +392,11 @@ class DraggableItem extends StatefulWidget {
     required this.child,
     required this.initialPosition,
     required this.initialSize,
+    required this.canvasSize,
     required this.onUpdate,
     required this.onDelete,
     this.isResizable = false,
+    this.maintainAspectRatio = false,
   }) : super(key: key);
 
   @override
@@ -414,12 +406,14 @@ class DraggableItem extends StatefulWidget {
 class _DraggableItemState extends State<DraggableItem> {
   late Offset position;
   late Size size;
+  late double aspectRatio;
 
   @override
   void initState() {
     super.initState();
     position = widget.initialPosition;
     size = widget.initialSize;
+    aspectRatio = size.width / size.height;
   }
 
   @override
@@ -429,34 +423,88 @@ class _DraggableItemState extends State<DraggableItem> {
       top: position.dy,
       child: GestureDetector(
         onPanUpdate: (details) {
-          setState(() => position += details.delta);
+          setState(() {
+            Offset newPosition = position + details.delta;
+
+            double dx = newPosition.dx.clamp(
+              0.0,
+              widget.canvasSize.width - size.width,
+            );
+            double dy = newPosition.dy.clamp(
+              0.0,
+              widget.canvasSize.height - size.height,
+            );
+
+            position = Offset(dx, dy);
+          });
         },
         onPanEnd: (_) => widget.onUpdate(position, size),
         onLongPress: widget.onDelete,
         child: SizedBox(
           width: size.width,
-          height: widget.isResizable ? size.height : null,
+          height: size.height,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              widget.child,
+              Positioned.fill(child: widget.child),
+
+              // Resize handle
               if (widget.isResizable)
                 Positioned(
-                  right: 0,
-                  bottom: 0,
+                  right: -10,
+                  bottom: -10,
                   child: GestureDetector(
                     onPanUpdate: (details) {
                       setState(() {
-                        size = Size(
-                          size.width + details.delta.dx,
-                          size.height + details.delta.dy,
-                        );
+                        double newWidth = size.width + details.delta.dx;
+                        double newHeight;
+
+                        if (widget.maintainAspectRatio) {
+                          newHeight = newWidth / aspectRatio;
+
+                          if (position.dx + newWidth >
+                              widget.canvasSize.width) {
+                            newWidth = widget.canvasSize.width - position.dx;
+                            newHeight = newWidth / aspectRatio;
+                          }
+                          if (position.dy + newHeight >
+                              widget.canvasSize.height) {
+                            newHeight = widget.canvasSize.height - position.dy;
+                            newWidth = newHeight * aspectRatio;
+                          }
+                        } else {
+                          newHeight = size.height + details.delta.dy;
+
+                          newWidth = newWidth.clamp(
+                            30.0,
+                            widget.canvasSize.width - position.dx,
+                          );
+                          newHeight = newHeight.clamp(
+                            30.0,
+                            widget.canvasSize.height - position.dy,
+                          );
+                        }
+
+                        if (newWidth > 30 && newHeight > 30) {
+                          size = Size(newWidth, newHeight);
+                        }
                       });
                     },
                     onPanEnd: (_) => widget.onUpdate(position, size),
-                    child: const Icon(
-                      Icons.open_in_full,
-                      size: 18,
-                      color: Colors.blue,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(blurRadius: 2, color: Colors.black26),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.open_in_full,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),

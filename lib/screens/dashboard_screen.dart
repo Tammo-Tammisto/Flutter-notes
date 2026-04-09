@@ -13,20 +13,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _todayTasks = [];
   List<Map<String, dynamic>> _recentActivity = [];
-  Timer? _refreshTimer; // Added
-  String _lastDate = ""; // Added
+  Timer? _refreshTimer;
+  String _lastDate = "";
 
   @override
   void initState() {
     super.initState();
-    _lastDate = _getDateString(); // Added
+    _lastDate = _getDateString();
     _loadDashboardData();
-    _startTimer(); // Added
+    _startTimer();
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel(); // Added
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -52,8 +52,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     setState(() {
       _todayTasks = tasks;
-      _recentActivity = activity;
+      // Group consecutive identical activities
+      _recentActivity = _groupActivities(activity);
     });
+  }
+
+  // Helper function to group consecutive identical rows
+  List<Map<String, dynamic>> _groupActivities(
+    List<Map<String, dynamic>> rawActivity,
+  ) {
+    if (rawActivity.isEmpty) return [];
+
+    List<Map<String, dynamic>> grouped = [];
+
+    for (var row in rawActivity) {
+      if (grouped.isEmpty) {
+        grouped.add({...row, 'count': 1});
+      } else {
+        // Compare description with the last item added to grouped list
+        if (grouped.last['description'] == row['description']) {
+          grouped.last['count']++;
+        } else {
+          grouped.add({...row, 'count': 1});
+        }
+      }
+    }
+    return grouped;
   }
 
   @override
@@ -66,7 +90,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // TOP ROW: Pinned Note Cards (Placeholders)
               Row(
                 children: [
                   _buildTopCard(
@@ -88,15 +111,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-
-              // TODAY'S CALENDAR TASKS PANEL
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: const Color(
-                      0xFF7F76B3,
-                    ), // Your original purple theme
+                    color: const Color(0xFF7F76B3),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
@@ -127,7 +146,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 itemBuilder: (context, index) {
                                   final task = _todayTasks[index];
                                   bool isDone = task['isDone'] == 1;
-
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
                                     padding: const EdgeInsets.symmetric(
@@ -156,7 +174,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             task['id'],
                                             isDone,
                                           );
-                                          // Refresh data to show new task state AND update activity log
                                           _loadDashboardData();
                                         },
                                       ),
@@ -167,7 +184,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               ? Colors.white38
                                               : Colors.white,
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w500,
                                           decoration: isDone
                                               ? TextDecoration.lineThrough
                                               : null,
@@ -186,12 +202,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(width: 16),
-
         // RIGHT SIDE: Profile and Recent Activity
         Expanded(
           child: Column(
             children: [
-              // Penguin Profile / Welcome
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -226,8 +240,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // NEW: Recent Activity Panel (Replaced Cookie Jar)
               Expanded(
                 child: Container(
                   width: double.infinity,
@@ -263,6 +275,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 itemCount: _recentActivity.length,
                                 itemBuilder: (context, index) {
                                   final activity = _recentActivity[index];
+                                  final int count = activity['count'] ?? 1;
+
                                   return Padding(
                                     padding: const EdgeInsets.only(
                                       bottom: 12.0,
@@ -281,12 +295,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         Expanded(
-                                          child: Text(
-                                            activity['description'],
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.black87,
-                                              height: 1.3,
+                                          child: Text.rich(
+                                            TextSpan(
+                                              text: activity['description'],
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.black87,
+                                                height: 1.3,
+                                              ),
+                                              children: [
+                                                if (count > 1)
+                                                  TextSpan(
+                                                    text: " ($count)",
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.blueAccent,
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                           ),
                                         ),
